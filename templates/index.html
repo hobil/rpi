@@ -6,15 +6,16 @@
     <link rel="stylesheet" href="{{ static_url("rpi.css") }}" type="text/css">
   </head>
   <body>
+      <p>
+        If you write words "yellow", "red", or "green", the corresponding button gets colored. Other input is ignored.<br><br>
+        Websocket is used to refresh the webpage automatically on new input <br>
+        (try curl -X POST http://localhost:8888/a/message/new -d  
+        "body=red").
+      </p>
       <button id="red" style="background-color: grey"></button>
       <button id="yellow" style="background-color: grey"></button>
       <button id="green" style="background-color: grey"></button>
     <div id="body">
-      <div id="inbox">
-        {% for message in messages %}
-          {% module Template("message.html", message=message) %}
-        {% end %}
-      </div>
       <div id="input">
         <form action="/a/message/new" method="post" id="messageform">
           <table>
