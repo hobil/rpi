@@ -1,3 +1,2 @@
 # Experiments with Raspberry Pi
-Provides code for Day 15 of Conrad's Adventskalender Raspberry Pi 2018.
-
+Provides code for Day 15 of [Conrad's Adventskalender Raspberry Pi 2018](http://www.produktinfo.conrad.com/datenblaetter/1600000-1699999/001662785-an-01-en-CONRAD_RASPBERRY_PI_ADVENTSKALENDER_2018.pdf).
