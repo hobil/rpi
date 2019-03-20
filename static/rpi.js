@@ -74,7 +74,7 @@ jQuery.fn.enable = function(opt_enable) {
     return this;
 };
 
-var colors = ['red', 'yellow','green'];
+var colors = ['green', 'yellow', 'orange', 'red'];
 
 var updater = {
     errorSleepTime: 500,
@@ -116,17 +116,7 @@ var updater = {
     },
 
     showMessage: function(message) {
-        console.log(message)
-        var existing = $("#m" + message.id);
-        if (existing.length > 0) return;
-        var node = $(message.html);
-        node.hide();
-        $("#inbox").append(node);
-        node.slideDown();
         colors.forEach(function(color){
-            // if (message.body == 'yellow') {
-            //    yellow_button = $("#yellow");
-            //    yellow_button.css('background','red');
             if (message.body == color) {
                 $('#' + color).css('background',color);
             } else {
