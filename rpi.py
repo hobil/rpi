@@ -12,7 +12,14 @@ from tornado.options import define, options, parse_command_line
 import os.path
 import uuid
 
-define("port", default=8888, help="run on the given port", type=int)
+import RPi.GPIO as GPIO
+from time import sleep
+import requests
+import threading
+
+port = 8000
+
+define("port", default=port, help="run on the given port", type=int)
 define("debug", default=True, help="run in debug mode")
 
 
@@ -84,6 +91,27 @@ class MessageUpdatesHandler(tornado.web.RequestHandler):
     def on_connection_close(self):
         self.wait_future.cancel()
 
+led_colors = ['green', 'yellow', 'orange', 'red']
+pins = [21, 16, 12, 8]
+delay = 1
+
+
+def rpi_client():
+    GPIO.setmode(GPIO.BCM)
+    for color, pin in zip(led_colors, pins):
+        GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
+    widerstand_pin = 25
+    GPIO.setup(widerstand_pin, GPIO.IN)
+    i = 0
+    while True:
+        while GPIO.input(widerstand_pin) == GPIO.LOW:
+            GPIO.output(pins[i], 1)
+            GPIO.output(pins[i - 1], 0)
+            requests.post('http://localhost:' + str(port) + '/a/message/new',{'body': led_colors[i]})
+            i = (i + 1) % 4
+            sleep(delay)
+    GPIO.cleanup
+
 
 def main():
     parse_command_line()
@@ -100,6 +128,9 @@ def main():
         debug=options.debug,
     )
     app.listen(options.port)
+
+    rpi_thread = threading.Thread(target=rpi_client)
+    rpi_thread.start()
 
     tornado.ioloop.IOLoop.current().start()
 
