@@ -47,6 +47,13 @@ class MainHandler(tornado.web.RequestHandler):
     def get(self):
         self.render("index.html")
 
+class SliderHandler(tornado.web.RequestHandler):
+    def get(self):
+        print(self.request.path)
+        global delay
+        delay = float(self.request.path.split('/')[2]) / 1000.0
+        print("DELAY:",delay)
+
 
 class MessageNewHandler(tornado.web.RequestHandler):
     """Post a new message to the chat room."""
@@ -88,7 +95,8 @@ class MessageUpdatesHandler(tornado.web.RequestHandler):
 
 led_colors = ['green', 'yellow', 'orange', 'red']
 pins = [21, 16, 12, 8]
-delay = 1
+# frequency of LED change in seconds
+delay = 1 
 
 
 def rpi_client():
@@ -113,6 +121,7 @@ def main():
     app = tornado.web.Application(
         [
             (r"/", MainHandler),
+            (r"/slider/.*", SliderHandler),
             (r"/a/message/new", MessageNewHandler),
             (r"/a/message/updates", MessageUpdatesHandler),
         ],
