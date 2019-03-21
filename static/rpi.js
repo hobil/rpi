@@ -125,3 +125,11 @@ var updater = {
         })
     }
 };
+
+function onchange_slider() {
+    var slider_value = $('#delay_slider').val();
+    $('#delay_label').text(slider_value / 1000.0);
+    var xhttp = new XMLHttpRequest();
+    xhttp.open("GET", "/slider/" + slider_value, true);
+    xhttp.send();
+};
