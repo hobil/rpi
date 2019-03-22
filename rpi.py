@@ -12,7 +12,10 @@ from tornado.options import define, options, parse_command_line
 import os.path
 import uuid
 
-import RPi.GPIO as GPIO
+try:
+    import RPi.GPIO as GPIO
+except RuntimeError:
+    import FakeRPi.GPIO as GPIO
 from time import sleep
 import requests
 import threading
