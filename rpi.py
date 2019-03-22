@@ -16,15 +16,21 @@ try:
     import RPi.GPIO as GPIO
 except RuntimeError:
     import FakeRPi.GPIO as GPIO
-from time import sleep
+
+import time
 import requests
 import threading
+import logging
+
+logger = logging.getLogger('__name__')
+logger.setLevel(logging.DEBUG)
 
 port = 8000
 
 define("port", default=port, help="run on the given port", type=int)
 define("debug", default=True, help="run in debug mode")
 
+interrupt_flag = threading.Event()
 
 class MessageBuffer(object):
     def __init__(self):
@@ -52,10 +58,12 @@ class MainHandler(tornado.web.RequestHandler):
 
 class SliderHandler(tornado.web.RequestHandler):
     def get(self):
-        print(self.request.path)
         global delay
         delay = float(self.request.path.split('/')[2]) / 1000.0
-        print("DELAY:",delay)
+        print("DELAY set to: %s seconds" % delay)
+        global interrupt_flag
+        interrupt_flag.set()
+        interrupt_flag.clear()
 
 
 class MessageNewHandler(tornado.web.RequestHandler):
@@ -102,9 +110,9 @@ pins = [21, 16, 12, 8]
 delay = 1 
 
 
-def rpi_client():
+def rpi_client(interrupt_flag):
     GPIO.setmode(GPIO.BCM)
-    for color, pin in zip(led_colors, pins):
+    for pin in pins:
         GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
     widerstand_pin = 25
     GPIO.setup(widerstand_pin, GPIO.IN)
@@ -115,7 +123,9 @@ def rpi_client():
             GPIO.output(pins[i - 1], 0)
             requests.post('http://localhost:' + str(port) + '/a/message/new',{'body': led_colors[i]})
             i = (i + 1) % 4
-            sleep(delay)
+            sleep_start = time.time()
+            interrupt_flag.wait(delay)
+            logger.debug("slept for %s seconds." % round(time.time() - sleep_start, 3))
     GPIO.cleanup
 
 
@@ -128,15 +138,13 @@ def main():
             (r"/a/message/new", MessageNewHandler),
             (r"/a/message/updates", MessageUpdatesHandler),
         ],
-        cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
         template_path=os.path.join(os.path.dirname(__file__), "templates"),
         static_path=os.path.join(os.path.dirname(__file__), "static"),
-        # xsrf_cookies=True, #TODO: SAFETY?
         debug=options.debug,
     )
     app.listen(options.port)
 
-    rpi_thread = threading.Thread(target=rpi_client)
+    rpi_thread = threading.Thread(target=rpi_client, args=[interrupt_flag])
     rpi_thread.start()
 
     tornado.ioloop.IOLoop.current().start()
