@@ -118,14 +118,14 @@ def rpi_client(interrupt_flag):
     GPIO.setup(widerstand_pin, GPIO.IN)
     i = 0
     while True:
-        while GPIO.input(widerstand_pin) == GPIO.LOW:
-            GPIO.output(pins[i], 1)
-            GPIO.output(pins[i - 1], 0)
-            requests.post('http://localhost:' + str(port) + '/a/message/new',{'body': led_colors[i]})
-            i = (i + 1) % 4
-            sleep_start = time.time()
-            interrupt_flag.wait(delay)
-            logger.debug("slept for %s seconds." % round(time.time() - sleep_start, 3))
+        GPIO.wait_for_edge(widerstand_pin, GPIO.FALLING)
+        GPIO.output(pins[i], 1)
+        GPIO.output(pins[i - 1], 0)
+        requests.post('http://localhost:' + str(port) + '/a/message/new',{'body': led_colors[i]})
+        i = (i + 1) % 4
+        sleep_start = time.time()
+        interrupt_flag.wait(delay)
+        logger.debug("slept for %s seconds." % round(time.time() - sleep_start, 3))
     GPIO.cleanup
 
 
