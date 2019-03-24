@@ -22,6 +22,11 @@ import requests
 import threading
 import logging
 
+import wiringpi
+wiringpi.wiringPiSetupGpio()
+wiringpi.softToneCreate(40)
+
+
 logger = logging.getLogger('__name__')
 logger.setLevel(logging.DEBUG)
 
@@ -31,6 +36,14 @@ define("port", default=port, help="run on the given port", type=int)
 define("debug", default=True, help="run in debug mode")
 
 interrupt_flag = threading.Event()
+
+led_colors = ['green', 'yellow', 'orange', 'red', 'purple']
+pins = [21, 20, 16, 12, 25]
+resistor_pin = 23
+tones = [262, 294, 330, 349, 392] # C1, D1, E1, F1, G1
+tone_pin = 40
+# frequency of LED change in seconds
+delay = 1
 
 class MessageBuffer(object):
     def __init__(self):
@@ -104,27 +117,28 @@ class MessageUpdatesHandler(tornado.web.RequestHandler):
     def on_connection_close(self):
         self.wait_future.cancel()
 
-led_colors = ['green', 'yellow', 'orange', 'red']
-pins = [21, 16, 12, 8]
-# frequency of LED change in seconds
-delay = 1 
-
 
 def rpi_client(interrupt_flag):
     GPIO.setmode(GPIO.BCM)
     for pin in pins:
         GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
-    widerstand_pin = 25
-    GPIO.setup(widerstand_pin, GPIO.IN)
+    GPIO.setup(resistor_pin, GPIO.IN)
     i = 0
     while True:
-        GPIO.wait_for_edge(widerstand_pin, GPIO.FALLING)
+        wiringpi.softToneWrite(tone_pin, 0)
+        if GPIO.input(resistor_pin) == GPIO.HIGH:
+            GPIO.wait_for_edge(resistor_pin, GPIO.FALLING)
         GPIO.output(pins[i], 1)
         GPIO.output(pins[i - 1], 0)
+        wiringpi.softToneWrite(tone_pin, tones[i])
         requests.post('http://localhost:' + str(port) + '/a/message/new',{'body': led_colors[i]})
-        i = (i + 1) % 4
+        i = (i + 1) % len(led_colors)
         sleep_start = time.time()
-        interrupt_flag.wait(delay)
+        # if slider was changed, reset waiting and wait for the new delay amount of seconds
+        # if slider wasn't changed within delay seconds, False is returned and while loop is stopped
+        while interrupt_flag.wait(delay):
+            pass
+
         logger.debug("slept for %s seconds." % round(time.time() - sleep_start, 3))
     GPIO.cleanup
 
