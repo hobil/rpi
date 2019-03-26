@@ -9,9 +9,9 @@ body, html {
   justify-content: center;
 }
 
-button {
-  height: 20vmin;
-  width: 20vmin;
+.btn-led {
+  height: 16vmin;
+  width: 16vmin;
   border: 2px solid black;
   color: black;
   padding: 20px;
@@ -22,26 +22,47 @@ button {
   pointer-events: none;
 }
 
+.btn-pattern {
+  height: 16vmin;
+  width: 16vmin;
+  font-size: 10vmin;
+}
+
+#pattern_p {
+  
+  font-size: 3vmin;
+}
+
 .slider {
   -webkit-appearance: none;
   width: 100%;
-  height: 20px;
+  height: 5vh;
   background: #d3d3d3;
-  border-radius: 5px;
+  border-radius: 50px;
   outline: none;
   opacity: 0.7;
   -webkit-transition: .2s;
   transition: opacity .2s;
 }
 
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 5vh;
+  height: 5vh;
+  border-radius: 50%; 
+  background: #4CAF50;
+  cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+  width: 5vh;
+  height: 5vh;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+}
+
 #p_delay_label {
   font-size: 5vmin;
 }
-
-/*
-#button_group {
-  display: flex;
-  margin:0 auto;
-  align-items:center;
-}
-*/

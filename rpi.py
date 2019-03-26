@@ -20,30 +20,61 @@ except RuntimeError:
 import time
 import requests
 import threading
+import multiprocessing
 import logging
-
 import wiringpi
-wiringpi.wiringPiSetupGpio()
-wiringpi.softToneCreate(40)
+
+from songs import ovcaci_ctveraci_notes, bezi_liska_k_taboru_notes
 
 
 logger = logging.getLogger('__name__')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 port = 8000
+new_message_url = "http://localhost:%s/a/message/new" % port
 
 define("port", default=port, help="run on the given port", type=int)
 define("debug", default=True, help="run in debug mode")
 
-interrupt_flag = threading.Event()
+# interrupt_flag = threading.Event()
+button_click_flag = threading.Event()
 
 led_colors = ['green', 'yellow', 'orange', 'red', 'purple']
 pins = [21, 20, 16, 12, 25]
 resistor_pin = 23
-tones = [262, 294, 330, 349, 392] # C1, D1, E1, F1, G1
+# tones = [262, 294, 330, 349, 392] # C1, D1, E1, F1, G1
+tones = [523, 587, 659, 698, 784] # C2, D2, E2, F2, G2
+#tones = [x + x // 2 for x in [262, 294, 330, 349, 392]] # C1, D1, E1, F1, G1
 tone_pin = 40
 # frequency of LED change in seconds
-delay = 1
+pause_length = 0.3
+pattern = None
+
+
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(40, GPIO.IN)
+wiringpi.wiringPiSetupGpio()
+wiringpi.softToneCreate(tone_pin)
+
+
+def rpi_client(button_click_flag):
+    
+    led_array = LEDArray(pins, tones, led_colors)
+    button_click_flag.wait()
+    while True:
+        t = multiprocessing.Process(target=led_array.shine, args=[pattern, pause_length, tone_pin])
+        t.start()
+        button_click_flag.wait()
+        # if button was clicked before t ended, terminate t and clear all LEDs (set to 0)
+        if t.exitcode is None or t.exitcode != 0:
+            t.terminate()
+            time.sleep(0.1)
+            led_array.clear()
+    GPIO.cleanup
+
+
+rpi_thread = threading.Thread(target=rpi_client, args=[button_click_flag])
 
 class MessageBuffer(object):
     def __init__(self):
@@ -67,16 +98,27 @@ global_message_buffer = MessageBuffer()
 
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
-        self.render("index.html")
+        self.render("index.html", pause_length=pause_length)
+
 
 class SliderHandler(tornado.web.RequestHandler):
     def get(self):
-        global delay
-        delay = float(self.request.path.split('/')[2]) / 1000.0
-        print("DELAY set to: %s seconds" % delay)
-        global interrupt_flag
-        interrupt_flag.set()
-        interrupt_flag.clear()
+        global pause_length
+        pause_length = float(self.request.path.split('/')[2]) / 1000.0
+        logger.debug("PAUSE_LENGTH set to: %s seconds" % pause_length)
+        # global interrupt_flag
+        # interrupt_flag.set()
+        # interrupt_flag.clear()
+
+
+class ButtonHandler(tornado.web.RequestHandler):
+    def get(self):
+        global pattern
+        pattern = self.request.path.split('/')[1].split('_')[1]
+        logger.debug("PATTERN set to: %s" % pattern)
+        global button_click_flag
+        button_click_flag.set()
+        button_click_flag.clear()
 
 
 class MessageNewHandler(tornado.web.RequestHandler):
@@ -114,11 +156,96 @@ class MessageUpdatesHandler(tornado.web.RequestHandler):
             return
         self.write(dict(messages=new_message))
 
-    def on_connection_close(self):
+    def on_connection_close(self): 
         self.wait_future.cancel()
 
 
-def rpi_client(interrupt_flag):
+class LED():
+    def __init__(self, pin, tone, color):
+        self.pin = pin
+        self.tone = tone
+        self.color = color
+        GPIO.setup(self.pin, GPIO.OUT, initial=GPIO.LOW)
+
+    def turn_on(self, shine_length=None):
+        GPIO.output(self.pin, 1)
+        wiringpi.softToneWrite(tone_pin, self.tone)
+        requests.post(new_message_url,{'body': '%s_1' % self.color})
+        logger.debug('%s_1' % self.color)
+    
+    def turn_off(self, post=True, tone=False):
+        GPIO.output(self.pin, 0)
+        if tone:
+            wiringpi.softToneWrite(tone_pin, self.tone)
+        else:
+            wiringpi.softToneWrite(tone_pin, 0)
+        if post:
+            requests.post(new_message_url,{'body': '%s_0' % self.color})
+        logger.debug('%s_0' % self.color)
+
+    def blink(self, length_seconds):
+        self.turn_on()
+        time.sleep(length_seconds)
+        self.turn_off()
+
+
+class LEDArray():
+    def __init__(self, pins, tones, colors):
+        self.leds = []
+        self.n_led = len(pins)
+        for pin, tone, color in zip(pins, tones, colors):
+            self.leds.append(LED(pin, tone, color))
+    
+    def clear(self):
+        for led in self.leds:
+            led.turn_off(post=False)
+        requests.post(new_message_url,{'body': 'clear'})
+    
+    def light_pattern_1(self, pause_length):
+        for led in self.leds:
+            led.turn_on()
+            time.sleep(pause_length)
+            led.turn_off()
+    
+    def light_pattern_2(self, pause_length):
+        for led in self.leds:
+            led.turn_on()
+            time.sleep(pause_length)
+        for led in self.leds:
+            led.turn_off(tone=True)
+            time.sleep(pause_length)
+
+    def light_pattern_3(self, pause_length):
+        for led in self.leds:
+            led.turn_on()
+            time.sleep(pause_length)
+        for led in self.leds[::-1]:
+            led.turn_off(tone=True)
+            time.sleep(pause_length)
+    
+    def play_song(self, notes, pause_length):
+        for tone, length in notes:
+            self.leds[tone].blink(length * pause_length)
+    
+    def shine(self, pattern, pause_length, tone_pin):
+        # the sound has to be defined here to work properly as shine is launched in a separate thread
+        wiringpi.softToneCreate(tone_pin)
+        if pattern == "1":
+            self.light_pattern_1(pause_length)
+        elif pattern == "2":
+            self.light_pattern_2(pause_length)
+        elif pattern == "3":
+            self.light_pattern_3(pause_length)
+        elif pattern == "4":
+            self.play_song(ovcaci_ctveraci_notes, pause_length)
+        elif pattern == "5":
+            self.play_song(bezi_liska_k_taboru_notes, pause_length)
+        else:
+            time.sleep(pause_length)
+
+
+"""
+def rpi_client_old(interrupt_flag):
     GPIO.setmode(GPIO.BCM)
     for pin in pins:
         GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
@@ -131,16 +258,17 @@ def rpi_client(interrupt_flag):
         GPIO.output(pins[i], 1)
         GPIO.output(pins[i - 1], 0)
         wiringpi.softToneWrite(tone_pin, tones[i])
-        requests.post('http://localhost:' + str(port) + '/a/message/new',{'body': led_colors[i]})
+        requests.post(new_message_url,{'body': led_colors[i]})
         i = (i + 1) % len(led_colors)
         sleep_start = time.time()
-        # if slider was changed, reset waiting and wait for the new delay amount of seconds
-        # if slider wasn't changed within delay seconds, False is returned and while loop is stopped
-        while interrupt_flag.wait(delay):
+        # if slider was changed, reset waiting and wait for the new pause_length amount of seconds
+        # if slider wasn't changed within pause_length seconds, False is returned and while loop is stopped
+        while interrupt_flag.wait(pause_length):
             pass
 
         logger.debug("slept for %s seconds." % round(time.time() - sleep_start, 3))
     GPIO.cleanup
+"""
 
 
 def main():
@@ -149,6 +277,7 @@ def main():
         [
             (r"/", MainHandler),
             (r"/slider/.*", SliderHandler),
+            (r"/pattern.*", ButtonHandler),
             (r"/a/message/new", MessageNewHandler),
             (r"/a/message/updates", MessageUpdatesHandler),
         ],
@@ -158,10 +287,13 @@ def main():
     )
     app.listen(options.port)
 
-    rpi_thread = threading.Thread(target=rpi_client, args=[interrupt_flag])
     rpi_thread.start()
 
-    tornado.ioloop.IOLoop.current().start()
+    try:
+        tornado.ioloop.IOLoop.current().start()
+    except KeyboardInterrupt:
+        print("exiting")
+        GPIO.cleanup
 
 
 if __name__ == "__main__":

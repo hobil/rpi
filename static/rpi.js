@@ -74,7 +74,9 @@ jQuery.fn.enable = function(opt_enable) {
     return this;
 };
 
-var colors = ['green', 'yellow', 'orange', 'red'];
+var colors = ['green', 'yellow', 'orange', 'red', 'purple'];
+
+var default_led_background = "lightgray";
 
 var updater = {
     errorSleepTime: 500,
@@ -117,19 +119,30 @@ var updater = {
 
     showMessage: function(message) {
         colors.forEach(function(color){
-            if (message.body == color) {
-                $('#' + color).css('background',color);
-            } else {
-                $('#' + color).css('background', 'grey');
+            if (message.body == color + '_1') {
+                $('#' + color).css('background', color);
+                console.log(color, " set to ", 1);
+            } else if (message.body == color + '_0'){
+                $('#' + color).css('background', default_led_background);
+                console.log(color, " set to ", 0);
+            } else if (message.body == 'clear'){
+                $('#' + color).css('background', default_led_background);
+                console.log(color, " set to ", 0);
             }
         })
     }
 };
 
-function onchange_slider() {
+function oninput_slider() {
     var slider_value = $('#delay_slider').val();
-    $('#delay_label').text(slider_value / 1000.0);
+    $('#delay_label').text((slider_value / 1000.0).toFixed(1));
     var xhttp = new XMLHttpRequest();
     xhttp.open("GET", "/slider/" + slider_value, true);
+    xhttp.send();
+};
+
+function button_click(pattern_id) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.open("GET", "/pattern_" + pattern_id, true);
     xhttp.send();
 };
